@@ -1,8 +1,9 @@
 program teste (input, output);
-var x,y: integer;
+var
+    x, y : integer;
 begin
-	if x > y then
-		y:= x + y
-	else
-		x:= x - y
+    if x > y then
+        y := x + y
+    else
+        x := x - y;
 end.

@@ -59,13 +59,19 @@ void begin_end(void)
 // colocar a gramática aqui
 void stmtlist(void)
 {
-_stmtlist_head:
-	stmt();
-	if (lookahead == ';') {
-		match(';'); goto _stmtlist_head;
-	}
-}
+    stmt();  // primeiro comando obrigatório
 
+    while (lookahead == ';') {
+        match(';');
+        stmt();
+    }
+
+    // Se não há ';' e também não estamos no FOLLOW de stmtlist,
+    // delegamos para match(';') emitir a mensagem padronizada.
+    if (lookahead != END && lookahead != ELSE && lookahead != UNTIL) {
+        match(';');  // vai emitir: “esperava ';', mas encontrou X”
+    }
+}
 
 // vardeclaration -> [ VAR idlist ':' type ';' ( idlist ':' type ';' ) ]
 void vardeclaration(void)
@@ -321,12 +327,55 @@ _Fbegin:
 
 //////////////////////////// parser components /////////////////////////////////
 int lookahead;
-void match(int expected)
-{
-	if (lookahead == expected) {
-		lookahead = gettoken(source);
-	} else {
-		fprintf(stderr, "token mismatch at line %d\n", lineno);
-		exit(ERRTOKEN);
-	}
+static void nome_token_into(int tk, char *out, size_t n) {
+    // tokens genéricos
+    switch (tk) {
+        case ID:   snprintf(out, n, "%s", "identificador"); return;
+        case DEC:  snprintf(out, n, "%s", "número inteiro"); return;
+        case FLT:  snprintf(out, n, "%s", "número real");    return;
+        case ASGN: snprintf(out, n, "%s", ":=");              return;
+        case LEQ:  snprintf(out, n, "%s", "<=");              return;
+        case GEQ:  snprintf(out, n, "%s", ">=");              return;
+        case NEQ:  snprintf(out, n, "%s", "<>");              return;
+    }
+
+    // palavras-chave BEGIN..END
+    if (tk >= KEYWORD_FIRST && tk <= KEYWORD_LAST) {
+        snprintf(out, n, "%s", keywords[tk - KEYWORD_FIRST]);
+        return;
+    }
+
+    // ASCII imprimível
+    if (tk >= 32 && tk <= 126) {
+        snprintf(out, n, "'%c'", tk);
+        return;
+    }
+
+    snprintf(out, n, "%s", "token desconhecido");
 }
+
+void match(int esperado)
+{
+    if (lookahead == esperado) {
+        lookahead = gettoken(source);
+        return;
+    }
+
+    char exp_s[64], enc_s[64], enc_com_lex[128];
+    nome_token_into(esperado, exp_s, sizeof exp_s);
+    nome_token_into(lookahead, enc_s, sizeof enc_s);
+
+    const char *enc = enc_s;
+    if (lookahead == ID || lookahead == DEC || lookahead == FLT) {
+        snprintf(enc_com_lex, sizeof enc_com_lex, "%s (%s)", enc_s, lexeme);
+        enc = enc_com_lex;
+    }
+
+    fprintf(stderr,
+        "[Erro de sintaxe] Linha %d, coluna %d: esperava %s, mas encontrou %s.\n",
+        lineno, coluna, exp_s, enc);
+
+    exit(ERRTOKEN);
+}
+
+

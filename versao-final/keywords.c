@@ -3,29 +3,10 @@
 #include <keywords.h>
 
 //dicionário
-char * keywords[] = {
-    "begin",
-    "program",
-    "procedure",
-    "function",
-    "integer",
-    "real",
-    "boolean",
-    "var",
-    "if",
-    "then",
-    "else",
-    "repeat",
-    "until",
-    "while",
-    "do",
-    "or",
-    "div",
-    "mod",
-    "and",
-    "true",
-    "false",
-    "end",
+const char *keywords[] = {   // <- const
+    "begin","program","procedure","function","integer","real","boolean","var",
+    "if","then","else","repeat","until","while","do","or","div","mod",
+    "and","true","false","end",
 };
 
 

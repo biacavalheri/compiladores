@@ -7,6 +7,8 @@
 #include <lexer.h>
 
 char lexeme[MAXIDLEN + 1];
+int coluna = 1;
+
 
 /* Versão extendida de identificador Pascal
  * ID = [A-Za-z][A-Za-z0-9]*
@@ -227,6 +229,7 @@ int gettoken(FILE *source)
 	int token;
 
 	skipspaces(source);
+	coluna++;
 
 	if ( (token = isID(source)) ) return token;
 	if ( (token = isNUM(source)) ) return token;
@@ -236,6 +239,7 @@ int gettoken(FILE *source)
 
 	lexeme[0] = token = getc(source);
 	lexeme[1] = 0;
+	coluna++;
 
 	// return an ASCII token
 	return token;
