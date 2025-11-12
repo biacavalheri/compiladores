@@ -1,3 +1,57 @@
+/****************************************************/
+/*
+Trabalho de Compiladores – Interpretador de Expressões
+
+Autores: Beatriz Cavalheri, Eduardo Bahia, Larissa Ferrari e Maysa Marques
+Data da ultima atualização:  13/11/2025
+Disciplina: Compiladores
+Professor: Eraldo Marinho
+-----------------------------------------------------
+OBJETIVO:
+Este programa implementa um interpretador de expressões aritméticas
+com variáveis e comandos simples. Ele realiza análise léxica e sintática
+utilizando uma gramática LL(1) e executa as expressões diretamente.
+
+-----------------------------------------------------
+GRAMÁTICA SIMPLIFICADA (LL(1)):
+
+mybc -> cmd { cmdsep cmd } EOF
+cmdsep -> ';' | '\n'
+
+cmd -> E 
+     | exit
+     | quit
+     | <epsilon>
+
+E -> [ '+' | '-' ] T { ('+' | '-') T }
+T -> F { ('*' | '/') F }
+F -> '(' E ')'
+    | DEC
+    | FLT
+    | ID [ ':=' E ]
+
+-----------------------------------------------------
+DESCRIÇÃO DAS FUNÇÕES PRINCIPAIS:
+
+mybc()   : ponto de entrada do interpretador. Gerencia comandos múltiplos.
+cmd()    : executa um comando, que pode ser uma expressão ou “exit/quit”.
+E()      : avalia expressões aritméticas com + e -.
+match()  : verifica se o token atual é o esperado; trata erros sintáticos.
+recall() : busca valores de variáveis na tabela de símbolos.
+store()  : armazena valores de variáveis na memória virtual.
+handleSigint(): trata o sinal Ctrl+C, garantindo saída limpa.
+-----------------------------------------------------
+DIFERENCIAIS DO CÓDIGO:
+
+- Usa um analisador LL(1) com lookahead (variável global “lookahead”).
+- Implementa tratamento de erros detalhado, incluindo linha e coluna.
+- Mantém uma tabela de símbolos (variáveis) em memória.
+- Interpreta expressões em tempo real, exibindo o resultado imediatamente.
+- Trata interrupções do usuário (Ctrl+C) e comandos múltiplos separados
+  por ponto e vírgula ou nova linha.
+*/
+/****************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,10 +61,17 @@
 #include <signal.h>
 
 
-int lookahead; // este é o olho do compilador
-int parse_error = 0; // indica se ocorreu erro no comando atual
+int lookahead; // este é o olho do compilador (token atual em análise)
+int parse_error = 0; // flag que indica se ocorreu erro no comando atual
 
-// Manipulador para Ctrl+C (SIGINT)
+/****************************************************
+ * handleSigint
+ * --------------------------------------------------
+ * Manipulador de sinal SIGINT (Ctrl + C).
+ * Quando o usuário pressiona Ctrl+C, imprime apenas uma quebra de linha,
+ * sem encerrar abruptamente o programa. Isso evita corrupção no buffer
+ * e mantém o interpretador responsivo.
+ ****************************************************/
 void handleSigint(int sig)
 {
     if (sig == SIGINT) {
@@ -19,9 +80,15 @@ void handleSigint(int sig)
     }
 }
 
-// Interpretador de comando
-//
-// mybc -> cmd { cmdsep cmd} EOF
+/****************************************************
+ * mybc
+ * --------------------------------------------------
+ * Função principal do interpretador de comandos.
+ * mybc -> cmd { cmdsep cmd } EOF
+ * Onde cmdsep pode ser ';' ou '\n'.
+ * 
+ * Executa comandos em sequência até o final do arquivo (EOF).
+ ****************************************************/
 void mybc(void)
 {
 	cmd();
@@ -29,15 +96,21 @@ void mybc(void)
 	while(lookahead == ';' || lookahead == '\n'){
 		// cmdsep -> ';' | '\n'
 		match(lookahead);
-
 		cmd();
-
 	}
 
 	match(EOF);
 }
 
-// cmd -> E | exit | quit | <epsilon>
+/****************************************************
+ * cmd
+ * --------------------------------------------------
+ * cmd -> E | exit | quit | <epsilon>
+ * 
+ * Esta função reconhece um comando do usuário.
+ * Pode ser uma expressão, ou os comandos de saída (exit/quit).
+ * Caso haja erro de parsing, limpa o estado de erro antes de continuar.
+ ****************************************************/
 void cmd(void)
 {
 	switch(lookahead) {
@@ -56,60 +129,89 @@ void cmd(void)
 		case ID:
 			E();
 			if (!parse_error) {
-    			printf("%lg\n", acc);
+    			printf("%lg\n", acc); // imprime o resultado da expressão
 			} else {
-    			parse_error = 0; // Reseta parse_error para o próximo comando
+    			parse_error = 0; // reseta o erro para o próximo comando
 			}
 			break;
 		default:
-			;
+			; // epsilon
 	}
 }
 
 extern FILE *objcode;
 
-double acc; //acumulador
+double acc; // acumulador principal (resultado da expressão atual)
 #define STACKSIZE 1024
-double stack[STACKSIZE];
-int sp = -1;
+double stack[STACKSIZE]; // pilha auxiliar para operadores binários
+int sp = -1; // stack pointer (inicialmente vazia)
 
-// tabela de símbolos comom dicionário dos valores armazenados na memória virtual
+/****************************************************
+ * Tabela de Símbolos
+ * --------------------------------------------------
+ * Implementada como um dicionário simples (vetores paralelos)
+ * que mapeia identificadores (variáveis) para valores numéricos.
+ ****************************************************/
 #define MAXSTENTRIES 4096
-char symtab[MAXSTENTRIES][MAXIDLEN+1];
-int symtab_next_entry = 0; //uso: strcpy(symtab[symtab_next_entry], name)
-double vmem[MAXSTENTRIES];
+char symtab[MAXSTENTRIES][MAXIDLEN+1]; // nomes das variáveis
+int symtab_next_entry = 0; // índice da próxima posição livre
+double vmem[MAXSTENTRIES]; // memória virtual (valores associados)
 
 int address;
+
+/****************************************************
+ * recall
+ * --------------------------------------------------
+ * Busca o valor associado a uma variável.
+ * Caso a variável não exista, cria uma nova entrada com valor 0.0.
+ * Retorna o valor encontrado (ou 0.0 se nova variável).
+ ****************************************************/
 double recall(char const *name) {
-	// busca bottom-up a variável em name
 	for (address = symtab_next_entry - 1; address > -1; address--) {
 		if (strcmp(symtab[address], name) == 0) {
 			return vmem[address];
 		}
 	}
-	// variável ainda não existe
+	// variável ainda não existe — cria entrada nova
 	address = symtab_next_entry++;
 	strcpy(symtab[address], name);
-	return 0.e+00;//só para enfatizar que é ponto flutuante
+	return 0.e+00; // retorna zero (float)
 }
 
+/****************************************************
+ * store
+ * --------------------------------------------------
+ * Atualiza o valor de uma variável existente (ou cria nova).
+ * Utiliza a função recall para localizar o endereço.
+ ****************************************************/
 void store(char const *name) {
-	// vai localizar o endereço da variável na memória
 	recall(name);
 	vmem[address] = acc;
 }
 
-// E é o símbolo inicial da gramática LL(1) de expressões simplificadas
-// E -> [ ominus ] T { oplus T }
-// ominus = ['+''-']
-// oplus = ['+''-']
+/****************************************************
+ * E
+ * --------------------------------------------------
+ * E é o símbolo inicial da gramática LL(1) de expressões.
+ * 
+ * E -> [ ominus ] T { oplus T }
+ * onde:
+ *   ominus = ['+' | '-']
+ *   oplus  = ['+' | '-']
+ * 
+ * Essa função implementa avaliação recursiva e iterativa
+ * (usando GOTO para simular loops entre T e F),
+ * respeitando a precedência e associatividade dos operadores.
+ ****************************************************/
 void E(void)
 {
-	/*0*/int varname[MAXIDLEN+1];/**/
-	/*1*/int isnegate = 0;/**/
-	/*2*/int isotimes = 0;/**/
-	/*3*/int isoplus = 0;/**/
+	/* variáveis auxiliares de controle */
+	int varname[MAXIDLEN+1];
+	int isnegate = 0;
+	int isotimes = 0;
+	int isoplus = 0;
 
+	// Verifica sinal unário inicial
 	if(lookahead == '+' || lookahead == '-') {
 		if (lookahead == '-') {
 			isnegate = lookahead;
@@ -126,25 +228,25 @@ void E(void)
 			match('('); E(); match(')');
 			break;
 		case DEC:
-		/*4*/acc = atoi(lexeme);/**/
+			acc = atoi(lexeme); // número inteiro
 			match(DEC); break;
 		case FLT:
-		/*7*/acc = atof(lexeme);/**/
+			acc = atof(lexeme); // número real
 			match(FLT); break;
 		default:
 			// F -> ID [ := E ]
-			/**/strcpy(varname, lexeme);/**/ // tem que salvar antes do match senão perde o nome
+			strcpy(varname, lexeme); // salva o nome antes do match
 			match(ID);
 			if (lookahead == ASGN) {
 				match(ASGN);
-				E(); //trás o resultado no acumulador (acc)
-				/**/ store(varname);/**/ //armazena no endereço associado à varname
+				E(); // resultado vem em 'acc'
+				store(varname); // salva na memória virtual
 			} else {
-				/**/ acc = recall(varname);/**/
+				acc = recall(varname); // busca valor da variável
 			}
 	}
 	
-	/*9*/
+	// Verifica multiplicação/divisão pendente
 	if(isotimes) {
 		if(isotimes == '*'){
 			stack[sp] = stack[sp] * acc;
@@ -155,22 +257,21 @@ void E(void)
 		isotimes = 0;
 	}
 
-	/*10*/
+	// Trata operadores multiplicativos
 	if(lookahead == '*' || lookahead == '/') {
-		/*10*/isotimes = lookahead;/**/
-		/*10a*/stack[++sp] = acc;/**/
+		isotimes = lookahead;
+		stack[++sp] = acc;
 		match(lookahead); goto _Fbegin;
 	}
-    // term end
-	
-	/*11*/
+
+	// Aplica sinal unário negativo, se necessário
 	if(isnegate){
 		acc = -acc;
 		isnegate = 0;
 	}
 
-	/*12*/
-	if(isoplus /* isoplus :: oplus.t */){
+	// Aplica operadores de soma/subtração
+	if(isoplus){
 		if(isoplus == '+'){
 			stack[sp] = stack[sp] + acc;
 		} else {
@@ -180,21 +281,29 @@ void E(void)
 		isoplus = 0;
 	}
 
-	/**/
+	// Verifica presença de novos operadores aditivos
 	if(lookahead == '+' || lookahead == '-') {
-		/**/isoplus = lookahead;/**/
-		/**/stack[++sp] = acc;/**/
+		isoplus = lookahead;
+		stack[++sp] = acc;
 		match(lookahead); goto _Tbegin;
 	}
-	// expression end
+	// Fim da expressão
 }
 
-//////////////////////////// parser components /////////////////////////////////
-//TODO: implementar signalhandler para comandos
+/****************************************************
+ * match
+ * --------------------------------------------------
+ * Verifica se o token atual (lookahead) corresponde ao esperado.
+ * Caso sim, consome o token chamando gettoken().
+ * Caso contrário, emite mensagem de erro sintático detalhada,
+ * incluindo linha, coluna, token esperado e token recebido.
+ * 
+ * Implementa recuperação simples: avança até ';' ou '\n'
+ * para evitar abortar o interpretador.
+ ****************************************************/
 int lookahead;
 void match(int expected)
 {
-
 	if (parse_error) return; // já houve erro — ignora novas verificações
 
     if (lookahead == expected) {
@@ -202,11 +311,10 @@ void match(int expected)
         return;
     }
 
-
 	char expectedName[64];
     char receivedName[64];
+
     // Nome legível do token esperado
-	// Tenta traduzir tokens conhecidos
     switch (expected) {
         case ID:   strcpy(expectedName, "identifier"); break;
         case DEC:  strcpy(expectedName, "integer");    break;
@@ -219,17 +327,17 @@ void match(int expected)
             if (expected >= 32 && expected <= 126) {
                 snprintf(expectedName, sizeof(expectedName), "'%c'", expected);
             } else {
-                snprintf(expectedName, sizeof(expectedName), "token %d", expected); //Token desconhecido
+                snprintf(expectedName, sizeof(expectedName), "token %d", expected);
             }
             break;
     }
+
 	// Nome legível do token recebido
     if (lookahead == EOF) {
         strcpy(receivedName, "end of input");
     } else if (lookahead >= 32 && lookahead <= 126) {
         snprintf(receivedName, sizeof(receivedName), "'%c'", lookahead);
     } else {
-        // Tenta traduzir tokens conhecidos
         switch (lookahead) {
             case ID: strcpy(receivedName, "identifier"); break;
             case DEC: strcpy(receivedName, "integer"); break;
@@ -237,15 +345,17 @@ void match(int expected)
             case ASGN: strcpy(receivedName, "':=' (assignment)"); break;
             case EXIT: strcpy(receivedName, "'exit'"); break;
             case QUIT: strcpy(receivedName, "'quit'"); break;
-            default: snprintf(receivedName, sizeof(receivedName), "token %d", lookahead); break; //Token desconhecido
+            default: snprintf(receivedName, sizeof(receivedName), "token %d", lookahead); break;
         }
     }
 
-    // Mensagem de erro padronizada
+    // Mensagem de erro padronizada e clara
     fprintf(stderr, "\nERROR at line %d, column %d.\n", lineno, columno);
     fprintf(stderr, "Token mismatch: expected %s but received %s.\n", expectedName, receivedName);
 
 	parse_error = 1;
+
+	// Recuperação de erro: consome tokens até final do comando
 	while (lookahead != EOF && lookahead != ';' && lookahead != '\n') {
         lookahead = gettoken(source);
     }
