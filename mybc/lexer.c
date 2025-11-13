@@ -310,7 +310,7 @@ int isNUM(FILE *tape)
 	} else {
 		
 		 // Olhamos se o primeiro caractere é '.'
-		if ( (lexeme[0] = getc(tape)) == '.' ) {¨
+		if ( (lexeme[0] = getc(tape)) == '.' ) {
 
 			// Para ser float, DEVE ter um dígito depois de '.'
 			if ( isdigit( lexeme[1] = getc(tape) ) ) {
