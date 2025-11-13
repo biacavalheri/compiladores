@@ -91,12 +91,13 @@ void handleSigint(int sig)
  ****************************************************/
 void mybc(void)
 {
-	cmd();
+	cmd(); // Executa o primeiro comando digitado pelo usuário
 
+	// Se depois do comando vier um ';' ou uma quebra de linha, significa que existe outro comando para executar.
 	while(lookahead == ';' || lookahead == '\n'){
 		// cmdsep -> ';' | '\n'
-		match(lookahead);
-		cmd();
+		match(lookahead); // Consume esse separador (tira da entrada).
+		cmd(); // Executa o próximo comando.
 	}
 
 	match(EOF);
@@ -135,7 +136,7 @@ void cmd(void)
 			}
 			break;
 		default:
-			; // epsilon
+			; // epsilon (não faz nada)
 	}
 }
 
@@ -206,10 +207,10 @@ void store(char const *name) {
 void E(void)
 {
 	/* variáveis auxiliares de controle */
-	int varname[MAXIDLEN+1];
-	int isnegate = 0;
-	int isotimes = 0;
-	int isoplus = 0;
+	int varname[MAXIDLEN+1]; // guarda o nome da variável antes do match()
+	int isnegate = 0; // isnegate → guarda se há um sinal unário '-' no início
+	int isotimes = 0; // isotimes → guarda se o próximo operador é * ou /
+	int isoplus = 0; // isoplus  → guarda se o próximo operador é + ou -
 
 	// Verifica sinal unário inicial
 	if(lookahead == '+' || lookahead == '-') {
@@ -223,6 +224,14 @@ void E(void)
 
 	_Fbegin:
 
+	/* -----------------------------------------------------------
+	 * Parte responsável por reconhecer um F (operando)
+	 * F pode ser:
+	 *   - expressão entre parênteses
+	 *   - número inteiro
+	 *   - número real
+	 *   - variável (com ou sem atribuição)
+	 * ----------------------------------------------------------- */
 	switch(lookahead) {
 		case '(':
 			match('('); E(); match(')');
@@ -246,7 +255,20 @@ void E(void)
 			}
 	}
 	
-	// Verifica multiplicação/divisão pendente
+	/* =============================================================
+     * 1. APLICA OPERADORES MULTIPLICATIVOS PENDENTES (* ou /)
+     * -------------------------------------------------------------
+     * Quando encontramos um * ou /, não podemos aplicar imediatamente,
+     * porque ainda precisamos ler o próximo operando (outro F).
+     *
+     * Então guardamos o operador em isotimes e empilhamos o valor anterior.
+     * Quando chegamos aqui, já temos:
+     *   - valor anterior no stack[sp]
+     *   - novo operando em acc
+     *   - operador guardado em isotimes
+     *
+     * Agora podemos finalmente aplicar a operação.
+     * ============================================================= */
 	if(isotimes) {
 		if(isotimes == '*'){
 			stack[sp] = stack[sp] * acc;
@@ -257,20 +279,43 @@ void E(void)
 		isotimes = 0;
 	}
 
-	// Trata operadores multiplicativos
+	/* =============================================================
+     * 2. DETECTA NOVO OPERADOR * OU /
+     * -------------------------------------------------------------
+     * Se o próximo token é * ou /, significa que um novo termo
+     * multiplicativo começa. Então:
+     *   - guardamos o operador em isotimes
+     *   - empilhamos o valor atual (acc)
+     *   - consumimos o operador
+     *   - voltamos para ler um novo F (goto _Fbegin)
+     * ============================================================= */
 	if(lookahead == '*' || lookahead == '/') {
 		isotimes = lookahead;
 		stack[++sp] = acc;
 		match(lookahead); goto _Fbegin;
 	}
 
-	// Aplica sinal unário negativo, se necessário
+	/* =============================================================
+     * 3. APLICA SINAL UNÁRIO NEGATIVO (ex.: -3 ou -(a+2))
+     * -------------------------------------------------------------
+     * Esse sinal é lido lá no começo da expressão, mas só pode ser
+     * aplicado depois que a parte multiplicativa for resolvida.
+     * ============================================================= */
 	if(isnegate){
 		acc = -acc;
 		isnegate = 0;
 	}
 
-	// Aplica operadores de soma/subtração
+	/* =============================================================
+     * 4. APLICA OPERADORES ADITIVOS PENDENTES (+ ou -)
+     * -------------------------------------------------------------
+     * Assim como em * e /, operações de soma/subtração também são
+     * adiadas, mas apenas até que * e / acabem.
+     *
+     * Se havia um + ou - guardado em isoplus, aplicamos agora:
+     *   stack[sp]  → valor anterior
+     *   acc        → novo termo
+     * ============================================================= */
 	if(isoplus){
 		if(isoplus == '+'){
 			stack[sp] = stack[sp] + acc;
@@ -281,7 +326,16 @@ void E(void)
 		isoplus = 0;
 	}
 
-	// Verifica presença de novos operadores aditivos
+	 /* =============================================================
+     * 5. DETECTA NOVOS OPERADORES ADITIVOS (+ ou -)
+     * -------------------------------------------------------------
+     * Se o próximo token é + ou -, então uma nova parte da expressão
+     * começa. Então:
+     *   - guardamos o operador em isoplus
+     *   - empilhamos o valor atual
+     *   - consumimos o operador
+     *   - voltamos para ler mais termos (goto _Tbegin)
+     * ============================================================= */
 	if(lookahead == '+' || lookahead == '-') {
 		isoplus = lookahead;
 		stack[++sp] = acc;
@@ -304,13 +358,24 @@ void E(void)
 int lookahead;
 void match(int expected)
 {
-	if (parse_error) return; // já houve erro — ignora novas verificações
+	if (parse_error) return; // Se já houve erro antes, não tenta validar mais nada. Evita cascata de erros
 
+	/****************************************************
+     * CASO 1 — Sem erro: lookahead == expected
+     * --------------------------------------------------
+     * Então consome o token da entrada e lê o próximo.
+     ****************************************************/
     if (lookahead == expected) {
         lookahead = gettoken(source);
         return;
     }
 
+	/****************************************************
+     * CASO 2 — Erro sintático: token não corresponde
+     * --------------------------------------------------
+     * Precisamos gerar uma mensagem clara e amigável,
+     * dizendo qual token esperávamos e qual realmente veio.
+     ****************************************************/
 	char expectedName[64];
     char receivedName[64];
 
@@ -332,7 +397,7 @@ void match(int expected)
             break;
     }
 
-	// Nome legível do token recebido
+	// Converte o token esperado em texto legível
     if (lookahead == EOF) {
         strcpy(receivedName, "end of input");
     } else if (lookahead >= 32 && lookahead <= 126) {
@@ -355,7 +420,15 @@ void match(int expected)
 
 	parse_error = 1;
 
-	// Recuperação de erro: consome tokens até final do comando
+	/****************************************************
+     * RECUPERAÇÃO DE ERRO
+     * --------------------------------------------------
+     * Ignora tokens até encontrar o fim de comando:
+     *    ';'   ou   '\n'
+     *
+     * Assim o interpretador continua funcionando
+     * para o próximo comando da entrada.
+     ****************************************************/
 	while (lookahead != EOF && lookahead != ';' && lookahead != '\n') {
         lookahead = gettoken(source);
     }

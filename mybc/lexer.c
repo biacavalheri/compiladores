@@ -47,58 +47,109 @@ int columno = 0;
  ****************************************************/
 int isID(FILE *tape)
 {
+	// Lê o primeiro caractere e verifica se é letra
 	if ( isalpha(lexeme[0] = getc(tape)) ) {
-		columno++; // primeira letra
+		columno++; // Contabiliza o primeiro caractere
 		int i = 1;
+
+		// Continua lendo enquanto forem letras ou dígitos
 		while ( isalnum( lexeme[i] = getc(tape) ) ) {
 			columno++;
 			i++;
 		}
+
+		// O último caractere lido NÃO faz parte do identificador.
+        // Devolvemos para a entrada para que outro token o processe
 		ungetc(lexeme[i], tape);
+
+		// Finaliza o identificador com terminador nulo '\0'
+        // para transformar lexeme[] em uma string válida de C.
 		lexeme[i] = 0;
 
-		// Palavras reservadas de saída
+		// Caso o identificador seja exatamente "exit", retorna o token EXIT.
 		if(strcmp(lexeme, "exit") == 0){
 			return EXIT;
 		}
+
+		// Caso seja "quit", retorna o token QUIT.
 		if(strcmp(lexeme, "quit") == 0){
 			return QUIT;
 		}
-		return ID; // identificador comum
+
+		// Qualquer outro texto válido é um identificador comum.
+		return ID; 
 	}
-	ungetc(lexeme[0], tape);
-	lexeme[0] = 0;
-	return 0;
+
+	ungetc(lexeme[0], tape); // devolve o caractere lido
+	lexeme[0] = 0;           // limpa a string
+	return 0;                // indica "não reconheci ID"
 }
 
-/****************************************************
- * isDEC
- * --------------------------------------------------
- * Verifica se o lexema é um número inteiro decimal.
- * Formato:
- *    DEC = [1-9][0-9]* | 0
- * Retorna o token DEC caso o padrão seja reconhecido.
- ****************************************************/
+/*
+ * DEC = [1-9][0-9]* | '0'
+ *                           ------------------------------------------
+ *                          |                      digit               |
+ *                          |                    --------              |
+ *                          |                   |        |             |
+ *               digit      |     not zero      V        |  epsilon    V
+ * -->(is DEC)--------->(is ZERO)---------->(isdigit)-------------->((DEC))
+ *       |
+ *       | epsilon
+ *       |
+ *       V
+ *     ((0))
+ */
+ /*
+ * Verifica se o lexeme é um número decimal
+ * DEC = [1-9][0-9]* | 0
+ */
 int isDEC(FILE *tape)
 {
+	//  Lê o primeiro caractere e verifica se é um dígito. Se NÃO for dígito, não pode ser DEC
 	if ( isdigit(lexeme[0] = getc(tape)) ) {
-		columno++; // primeiro dígito
+
+		columno++; // Contabiliza o primeiro dígito lido
+
+		/* -------------------------------------------------------
+         * Caso especial: número começa com '0'
+         * -------------------------------------------------------
+         * Pela definição da gramática, o número 0 sozinho é válido,
+         * mas "012" não é tratado como inteiro normal aqui.
+         *
+         * Então:
+         *   - Se o número começar com '0', retornamos o token DEC
+         *     imediatamente, sem ler mais dígitos.
+         * ------------------------------------------------------- */
 		if (lexeme[0] == '0') {
-			lexeme[1] = 0;
+			lexeme[1] = 0;  // Finaliza string: "0"
 			return DEC;
 		}
+
+		/* -------------------------------------------------------
+         * Caso geral: número começa com [1-9]
+         * Agora lemos todos os próximos dígitos enquanto forem
+         * válidos, formando números como 12, 345, 78956 etc.
+         * ------------------------------------------------------- */
 		int i = 1;
 		while ( isdigit(lexeme[i] = getc(tape)) ) {
 			columno++;
 			i++;
 		}
+
+		// O último caractere lido NÃO faz parte do identificador.
+        // Devolvemos para a entrada para que outro token o processe
 		ungetc(lexeme[i], tape);
+
+		// Finaliza o identificador com terminador nulo '\0'
+        // para transformar lexeme[] em uma string válida de C.
 		lexeme[i] = 0;
+
+		// Retorna o token DEC (número inteiro)
 		return DEC;
 	}
-	ungetc(lexeme[0], tape);
-	lexeme[0] = 0;
-	return 0;
+	ungetc(lexeme[0], tape); 	// devolve o caractere lido
+	lexeme[0] = 0; 		 		// limpa a string
+	return 0; 			  		// indica "não reconheci DEC"
 }
 
 /****************************************************
@@ -140,17 +191,17 @@ int isEE(FILE *tape)
             lexeme[i] = 0;
             return FLT;
         }
-        // rollback em caso de erro
+        // Rollback se não houver dígito
         ungetc(lexeme[i], tape);
         i--;
         if(hassign)
 		{
             ungetc(lexeme[i], tape);
-            columno--;
+            columno--; // desfaz contagem do sinal
             i--;
         }
 		ungetc(lexeme[i], tape);
-		columno--;
+		columno--; // desfaz contagem do 'E'
 		lexeme[i] = 0;
 		return 0;
     }
@@ -178,7 +229,7 @@ int isNUM(FILE *tape)
 			columno++; // '.'
 			i++;
 			if ( isdigit( lexeme[i] = getc(tape) ) ) {
-				columno++;
+				columno++; // primeiro dígito após '.'
 				i++;
 				while ( isdigit( lexeme[i] = getc(tape) ) ) {
 					columno++;
@@ -188,6 +239,7 @@ int isNUM(FILE *tape)
 				lexeme[i] = 0;
 				token = FLT;
 			} else {
+				// Caso seja apenas DEC seguido de '.' sem dígitos
 				ungetc(lexeme[i], tape);
 				lexeme[i] = 0;
 				token = FLT;
@@ -197,11 +249,11 @@ int isNUM(FILE *tape)
 			lexeme[i] = 0;
 		}
 	} else {
-		// números começando com ponto, ex: .25
+		// Tenta reconhecer números começando com '.'
 		if ( (lexeme[0] = getc(tape)) == '.' ) {
 			if ( isdigit( lexeme[1] = getc(tape) ) ) {
 				token = FLT;
-				columno += 2;
+				columno += 2; // '.' e primeiro dígito
 				int i = 2;
 				while ( isdigit( lexeme[i] = getc(tape) ) ) {
 					columno++;
@@ -213,16 +265,15 @@ int isNUM(FILE *tape)
 				ungetc(lexeme[1], tape);
 				ungetc(lexeme[0], tape);
 				lexeme[0] = 0;
-				return 0;
+				return 0; // not a number
 			}
 		} else {
 			ungetc(lexeme[0], tape);
 			lexeme[0] = 0;
-			return 0;
+			return 0; // not a number
 		}
 	}
 	
-	// Verifica se possui parte exponencial
 	if (isEE(tape)) {
 		token = FLT;
 	}
@@ -265,7 +316,7 @@ void skipspaces(FILE *tape)
 	while ( isspace(head = getc(tape)) ){
 		if(head == '\n'){
 			lineno++;
-			columno = -1; // ajusta para o próximo caractere
+			columno = -1; // Para ignorar o \n do buffer
 			break;
 		}
 		columno++; 
@@ -323,6 +374,7 @@ int gettoken(FILE *source)
 	if ( (token = isASGN(source)) ) return token;
 	lexeme[0] = token = getc(source);
 	lexeme[1] = 0;
-	columno++; // token ASCII simples
+	columno++; // token ASCII (operadores como +, -, *, /, =, etc.)
+	// return an ASCII token
 	return token;
 }

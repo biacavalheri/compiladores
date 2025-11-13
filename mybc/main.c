@@ -31,8 +31,10 @@ Observações:
 /****************************************************
  * Variáveis globais:
  * --------------------------------------------------
- * source  → ponteiro para o arquivo de entrada (programa-fonte).
- * objcode → ponteiro para o arquivo de saída (geração simbólica, se houver).
+ * source  → fluxo de entrada do interpretador (ex.: stdin).
+ * objcode → fluxo de saída do interpretador (ex.: stdout).
+ *
+ * Observação: são streams FILE*, não caminhos de arquivo.
  ****************************************************/
 FILE *source, *objcode;
 
@@ -43,7 +45,9 @@ FILE *source, *objcode;
  ****************************************************/
 int main(void)
 {
-	signal(SIGINT, handleSigint); // Instala manipulador para Ctrl+C
+	// SIGINT é o sinal enviado quando você pressiona Ctrl+C no terminal.
+	// handleSigint é a função que trata esse sinal.
+	signal(SIGINT, handleSigint); // Instala manipulador para Ctrl+C. Se o usuário apertar Ctrl+C, em vez de fechar o programa, chame a função handleSigint()
 
 	lookahead = gettoken(source = stdin); // Lê o primeiro token da entrada
 	objcode = stdout;                     // Saída padrão (pode gerar assembly ou resultado)
