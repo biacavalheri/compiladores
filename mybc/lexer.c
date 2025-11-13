@@ -106,8 +106,6 @@ int isDEC(FILE *tape)
 	//  Lê o primeiro caractere e verifica se é um dígito. Se NÃO for dígito, não pode ser DEC
 	if ( isdigit(lexeme[0] = getc(tape)) ) {
 
-		columno++; // Contabiliza o primeiro dígito lido
-
 		/* -------------------------------------------------------
          * Caso especial: número começa com '0'
          * -------------------------------------------------------
@@ -355,9 +353,6 @@ int gettoken(FILE *source)
     // O Lexer deve garantir que columno e lineno estão certos antes de analisar.
     skipspaces(source); 
     skipArrow(source);
-
-    // Salva a coluna inicial do token para debug, se necessário
-    int start_columno = columno; 
 
     // 1. Tenta reconhecer tokens complexos
     if ( (token = isID(source)) ) {
