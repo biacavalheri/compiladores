@@ -11,7 +11,7 @@ Cada função aqui reconhece um tipo específico de lexema:
  - Identificadores (variáveis e nomes)
  - Números (inteiros e reais)
  - Operadores (atribuição ":=")
- - Espaços e setas (para ignorar entrada inválida)
+ - Espaços e setas (para ignorar entrada inválida)p
  
 O analisador léxico é o primeiro estágio da compilação.
 Ele abstrai o texto em elementos significativos para o parser LL(1).
@@ -478,18 +478,6 @@ void skipArrow(FILE *tape)
 }
 
 /****************************************************
- * isValidChar
- * --------------------------------------------------
- * Verifica se um caractere é válido na linguagem.
- * Caracteres válidos: operadores, parênteses, ponto e vírgula, etc.
- ****************************************************/
-int isValidChar(int c) {
-    return (c == '+' || c == '-' || c == '*' || c == '/' || 
-            c == '(' || c == ')' || c == ';' || c == '\n' || 
-            c == ':' || c == '=' || c == '.' || c == EOF);
-}
-
-/****************************************************
  * gettoken
  * --------------------------------------------------
  * Função principal do analisador léxico.
@@ -501,7 +489,6 @@ int isValidChar(int c) {
  *  3. Tenta reconhecer números (inteiros/reais).
  *  4. Tenta reconhecer operador ":=".
  *  5. Caso contrário, retorna o caractere ASCII como token.
- *  6. Se encontrar caractere inválido, emite erro léxico.
  ****************************************************/
 int gettoken(FILE *source)
 {
@@ -526,7 +513,6 @@ int gettoken(FILE *source)
 
     // Identificadores, variáveis e palavras-chave exit/quit
     if ( (token = isID(source)) ) {
-        columno += strlen(lexeme);
         return token;
     }
 
@@ -562,38 +548,13 @@ int gettoken(FILE *source)
 	if (token == '\n') {
 		// Nova linha → incrementa linha e zera coluna
         lineno++;
-        columno = 0;
-        lexeme[1] = 0;
-        return token;
-    }
+        columno = 0; // A linha avança e a coluna RESETA para 0
+    } else {
+		// Qualquer outro caractere ocupa 1 coluna
+		columno++; // Aumenta a coluna para o caractere ASCII simples (EX: +, *, ;)
+	}
 
-    // Verifica se é um caractere válido
-    if (!isValidChar(token)) {
-        // ERRO LÉXICO: caractere inválido
-        if (isprint(token)) {
-            fprintf(stderr, "\nLEXICAL ERROR at line %d, column %d.\n", lineno, columno + 1);
-            fprintf(stderr, "Invalid character: '%c'\n", token);
-        } else {
-            fprintf(stderr, "\nLEXICAL ERROR at line %d, column %d.\n", lineno, columno + 1);
-            fprintf(stderr, "Invalid character: ASCII code %d\n", token);
-        }
-        
-        // Consome toda a linha para recuperar do erro
-        while ((token = getc(source)) != '\n' && token != EOF) {
-            // descarta resto da linha
-        }
-        
-        if (token == '\n') {
-            lineno++;
-            columno = 0;
-        }
-        
-        lexeme[0] = '\n';
-        lexeme[1] = 0;
-        return '\n'; // Retorna newline para permitir próximo comando
-    }
-
-    columno++;
+	 // Finaliza lexeme como string de 1 caractere
     lexeme[1] = 0;
 	
 	// return an ASCII token
