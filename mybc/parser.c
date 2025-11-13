@@ -1,12 +1,5 @@
 /****************************************************/
 /*
-Trabalho de Compiladores – Interpretador de Expressões
-
-Autores: Beatriz Cavalheri, Eduardo Bahia, Larissa Ferrari e Maysa Marques
-Data da ultima atualização:  13/11/2025
-Disciplina: Compiladores
-Professor: Eraldo Marinho
------------------------------------------------------
 OBJETIVO:
 Este programa implementa um interpretador de expressões aritméticas
 com variáveis e comandos simples. Ele realiza análise léxica e sintática
