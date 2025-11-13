@@ -403,7 +403,7 @@ void match(int expected)
             case ASGN: strcpy(receivedName, "':=' (assignment)"); break;
             case EXIT: strcpy(receivedName, "'exit'"); break;
             case QUIT: strcpy(receivedName, "'quit'"); break;
-            default: snprintf(receivedName, sizeof(receivedName), "token %d", lookahead); break;
+            default: snprintf(receivedName, sizeof(receivedName), "token %d", lookahead);
         }
     }
 
