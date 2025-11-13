@@ -49,12 +49,10 @@ int isID(FILE *tape)
 {
 	// Lê o primeiro caractere e verifica se é letra
 	if ( isalpha(lexeme[0] = getc(tape)) ) {
-		columno++; // Contabiliza o primeiro caractere
 		int i = 1;
 
 		// Continua lendo enquanto forem letras ou dígitos
 		while ( isalnum( lexeme[i] = getc(tape) ) ) {
-			columno++;
 			i++;
 		}
 
@@ -132,7 +130,6 @@ int isDEC(FILE *tape)
          * ------------------------------------------------------- */
 		int i = 1;
 		while ( isdigit(lexeme[i] = getc(tape)) ) {
-			columno++;
 			i++;
 		}
 
@@ -166,13 +163,11 @@ int isEE(FILE *tape)
 	int i = strlen(lexeme);
     if (toupper(lexeme[i] = getc(tape)) == 'E' )
     {
-        columno++; // 'E' ou 'e'
         i++;
         int hassign = 0;
         // sinal opcional
         if ((lexeme[i] = getc(tape)) == '+' || lexeme[i] == '-') 
 		{
-            columno++;
             i++;
             hassign = 1;
         } else {
@@ -181,10 +176,8 @@ int isEE(FILE *tape)
         // dígito obrigatório
         if (isdigit(lexeme[i] = getc(tape))) 
 		{
-            columno++;
             i++;
             while ( isdigit(lexeme[i] = getc(tape))) {
-                columno++;
                 i++;
             }
             ungetc(lexeme[i], tape);
@@ -197,11 +190,9 @@ int isEE(FILE *tape)
         if(hassign)
 		{
             ungetc(lexeme[i], tape);
-            columno--; // desfaz contagem do sinal
             i--;
         }
 		ungetc(lexeme[i], tape);
-		columno--; // desfaz contagem do 'E'
 		lexeme[i] = 0;
 		return 0;
     }
@@ -226,13 +217,10 @@ int isNUM(FILE *tape)
 	if (token == DEC) {
 		int i = strlen(lexeme);
 		if ( (lexeme[i] = getc(tape)) == '.' ) {
-			columno++; // '.'
 			i++;
 			if ( isdigit( lexeme[i] = getc(tape) ) ) {
-				columno++; // primeiro dígito após '.'
 				i++;
 				while ( isdigit( lexeme[i] = getc(tape) ) ) {
-					columno++;
 					i++;
 				}
 				ungetc(lexeme[i], tape);
@@ -253,10 +241,8 @@ int isNUM(FILE *tape)
 		if ( (lexeme[0] = getc(tape)) == '.' ) {
 			if ( isdigit( lexeme[1] = getc(tape) ) ) {
 				token = FLT;
-				columno += 2; // '.' e primeiro dígito
 				int i = 2;
 				while ( isdigit( lexeme[i] = getc(tape) ) ) {
-					columno++;
 					i++;
 				}
 				ungetc(lexeme[i], tape);
@@ -274,6 +260,7 @@ int isNUM(FILE *tape)
 		}
 	}
 	
+	// Verifica se possui parte exponencial
 	if (isEE(tape)) {
 		token = FLT;
 	}
@@ -294,7 +281,6 @@ int isASGN(FILE *tape) {
 		if (lexeme[1] == '=') 
 		{
 			lexeme[2] = 0;
-			columno += 2; // ':' e '='
 			return ASGN;
 		}
 		ungetc(lexeme[1], tape);
@@ -312,16 +298,14 @@ int isASGN(FILE *tape) {
  ****************************************************/
 void skipspaces(FILE *tape)
 {
-	int head;
-	while ( isspace(head = getc(tape)) ){
-		if(head == '\n'){
-			lineno++;
-			columno = -1; // Para ignorar o \n do buffer
-			break;
-		}
-		columno++; 
-	}
-	ungetc(head, tape);
+    int head;
+    while ( isspace(head = getc(tape)) ){
+        if(head == '\n'){
+            break;
+        }
+        // columno++; 
+    }
+    ungetc(head, tape);
 }
 
 /****************************************************
@@ -337,7 +321,7 @@ void skipArrow(FILE *tape)
 		lexeme[2] = getc(tape);
 		if (lexeme[1] == '[' && 
 			(lexeme[2] == 'A' || lexeme[2] == 'B' || lexeme[2] == 'C' || lexeme[2] == 'D')) {
-			columno += 3;
+			// columno += 3;
 		} else {
 			// não é uma seta, devolve os caracteres lidos
 			ungetc(lexeme[2], tape);
@@ -366,15 +350,43 @@ void skipArrow(FILE *tape)
  ****************************************************/
 int gettoken(FILE *source)
 {
-	int token;
-	skipspaces(source);
-	skipArrow(source);
-	if ( (token = isID(source)) ) return token;
-	if ( (token = isNUM(source)) ) return token;
-	if ( (token = isASGN(source)) ) return token;
-	lexeme[0] = token = getc(source);
-	lexeme[1] = 0;
-	columno++; // token ASCII (operadores como +, -, *, /, =, etc.)
+    int token;
+    
+    // O Lexer deve garantir que columno e lineno estão certos antes de analisar.
+    skipspaces(source); 
+    skipArrow(source);
+
+    // Salva a coluna inicial do token para debug, se necessário
+    int start_columno = columno; 
+
+    // 1. Tenta reconhecer tokens complexos
+    if ( (token = isID(source)) ) {
+        return token;
+    }
+    if ( (token = isNUM(source)) ) {
+		columno += strlen(lexeme);
+        return token;
+    }
+    if ( (token = isASGN(source)) ) {
+        columno += 2; 
+        return token;
+    }
+    
+    // 2. Tenta reconhecer token ASCII simples
+    lexeme[0] = token = getc(source);
+
+    if (token == EOF) {
+        return EOF; 
+    }
+
+	if (token == '\n') {
+        lineno++;
+        columno = 0; // A linha avança e a coluna RESETA para 0
+    } else {
+		columno++; // Aumenta a coluna para o caractere ASCII simples (EX: +, *, ;)
+	}
+
+    lexeme[1] = 0;
 	// return an ASCII token
-	return token;
+    return token;
 }
