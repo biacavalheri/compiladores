@@ -301,6 +301,7 @@ void skipspaces(FILE *tape)
         if(head == '\n'){
             break;
         }
+		// Descomentar a linha abaixo caso queira contar os espaços como colunas
         // columno++; 
     }
     ungetc(head, tape);
@@ -319,7 +320,8 @@ void skipArrow(FILE *tape)
 		lexeme[2] = getc(tape);
 		if (lexeme[1] == '[' && 
 			(lexeme[2] == 'A' || lexeme[2] == 'B' || lexeme[2] == 'C' || lexeme[2] == 'D')) {
-			// columno += 3;
+			// Descomentar a linha abaixo caso desajar contar as setas como colunas
+			// columno += 3; 
 		} else {
 			// não é uma seta, devolve os caracteres lidos
 			ungetc(lexeme[2], tape);
